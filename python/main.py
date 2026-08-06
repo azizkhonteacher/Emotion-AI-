@@ -12,15 +12,20 @@ from utils import setup_logger
 from face_detector import FaceDetector
 from emotion_detector import EmotionDetector
 from config import EMOTION_DETECTION_INTERVAL
+from emotion_mapper import EmotionMapper
+from serial_sender import SerialSender
 
 
 logger = setup_logger(__name__)
-
 
 def main() -> None:
     """
     Start the camera preview.
     """
+    serial_sender = SerialSender()
+
+    if not serial_sender.connect():
+        logger.warning("ESP32 not connected. Running without serial.")
 
     camera = None
 
@@ -34,6 +39,7 @@ def main() -> None:
         frame_count = 0
         current_emotion = ""
         current_confidence = 0.0
+        last_sent_emotion = None
 
         while True:
             frame = camera.read()
@@ -52,17 +58,15 @@ def main() -> None:
                 )
                 
                 if frame_count % EMOTION_DETECTION_INTERVAL == 0:
-
                     face_roi = frame[y:y + h, x:x + w]
-
                     result = emotion_detector.detect(face_roi)
 
                     if result is not None:
                         current_emotion, current_confidence = result
 
                 if current_emotion:
-
-                    text = f"{current_emotion} ({current_confidence:.1f}%)) "
+                    # Ortiqcha qavs olib tashlandi
+                    text = f"{current_emotion} ({current_confidence:.1f}%)"
 
                     cv2.putText(
                         frame,
@@ -74,6 +78,11 @@ def main() -> None:
                         2,
                     )
                 
+                mapped = EmotionMapper.map(current_emotion)
+
+                if mapped != last_sent_emotion:
+                    serial_sender.send(mapped.value)
+                    last_sent_emotion = mapped
 
             cv2.imshow(WINDOW_NAME, frame)
 
@@ -87,11 +96,14 @@ def main() -> None:
         logger.exception("Unexpected error: %s", exc)
 
     finally:
+        # Dastur yakunlanganda barcha qurilmalar xavfsiz yopiladi
         if camera is not None:
             camera.release()
-
+            
+        serial_sender.close() # Portni yopish funksiya ichiga olib kirildi
+        cv2.destroyAllWindows() # Ochiq qolgan darcha yopiladi
+        
         logger.info("Application closed.")
-
 
 if __name__ == "__main__":
     main()
