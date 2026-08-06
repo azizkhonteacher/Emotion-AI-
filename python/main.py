@@ -9,6 +9,9 @@ import cv2
 from camera import Camera
 from config import WINDOW_NAME
 from utils import setup_logger
+from face_detector import FaceDetector
+from emotion_detector import EmotionDetector
+from config import EMOTION_DETECTION_INTERVAL
 
 
 logger = setup_logger(__name__)
@@ -25,9 +28,52 @@ def main() -> None:
         logger.info("Application started.")
 
         camera = Camera()
+        face_detector = FaceDetector()
+        emotion_detector = EmotionDetector()
+        
+        frame_count = 0
+        current_emotion = ""
+        current_confidence = 0.0
 
         while True:
             frame = camera.read()
+            
+            faces = face_detector.detect(frame)
+            
+            frame_count += 1
+
+            for (x, y, w, h) in faces:
+                cv2.rectangle(
+                    frame,
+                    (x, y),
+                    (x + w, y + h),
+                    (0, 255, 0),
+                    2,
+                )
+                
+                if frame_count % EMOTION_DETECTION_INTERVAL == 0:
+
+                    face_roi = frame[y:y + h, x:x + w]
+
+                    result = emotion_detector.detect(face_roi)
+
+                    if result is not None:
+                        current_emotion, current_confidence = result
+
+                if current_emotion:
+
+                    text = f"{current_emotion} ({current_confidence:.1f}%)) "
+
+                    cv2.putText(
+                        frame,
+                        text,
+                        (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 255, 0),
+                        2,
+                    )
+                
 
             cv2.imshow(WINDOW_NAME, frame)
 
