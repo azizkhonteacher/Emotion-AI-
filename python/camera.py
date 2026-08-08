@@ -53,6 +53,7 @@ class Camera:
         if not success:
             logger.error("Failed to read frame.")
             raise RuntimeError("Failed to read frame.")
+        frame = cv2.flip(frame, 1)
 
         return frame
 

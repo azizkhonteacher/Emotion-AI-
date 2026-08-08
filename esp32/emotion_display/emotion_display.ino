@@ -1,8 +1,11 @@
+#include <MD_MAX72xx.h>
 #include <SPI.h>
-#include <MD_MAX72XX.h>
 
 #include "config.h"
+#include "display.h"
 #include "emoji.h"
+#include "protocol.h"
+#include "serial_handler.h"
 
 MD_MAX72XX matrix(
     HARDWARE_TYPE,
@@ -12,48 +15,97 @@ MD_MAX72XX matrix(
     MAX_DEVICES
 );
 
+Display display(matrix);
+SerialHandler serialHandler(115200);
+Emotion currentEmotion = Emotion::Unknown;
+
+
+const Emoji* getEmoji(Emotion emotion)
+{
+    switch (emotion)
+    {
+        case Emotion::Happy:
+            return &HAPPY;
+
+        case Emotion::Sad:
+            return &SAD;
+
+        case Emotion::Angry:
+            return &ANGRY;
+
+        case Emotion::Neutral:
+            return &NEUTRAL;
+
+        case Emotion::Surprise:
+            return &SURPRISE;
+
+        case Emotion::Fear:
+            return &FEAR;
+
+        case Emotion::Disgust:
+            return &DISGUST;
+
+        case Emotion::Unknown:
+        default:
+            return nullptr;
+    }
+}
+
+
 void setup()
 {
-    Serial.begin(115200);
+    serialHandler.begin();
 
-    matrix.begin();
+    display.begin(5);
 
-    matrix.control(MD_MAX72XX::INTENSITY, 5);
-
-    matrix.clear();
+    display.show(HAPPY);
 
     Serial.println("Matrix initialized.");
-
-    // Hardware Test
-    for (uint8_t row = 0; row < 8; row++)
-    {
-        for (uint8_t col = 0; col < 8; col++)
-        {
-            matrix.setPoint(row, col, true);
-        }
-    }
-
-    matrix.update();
-    drawBitmap(HAPPY);
+    Serial.println("System ready.");
 }
 
-
-void drawBitmap(const uint8_t bitmap[8])
-{
-    matrix.clear();
-
-    for (uint8_t row = 0; row < 8; row++)
-    {
-        for (uint8_t col = 0; col < 8; col++)
-        {
-            bool pixel = bitRead(bitmap[row], 7 - col);
-            matrix.setPoint(row, col, pixel);
-        }
-    }
-
-    matrix.update();
-}
 
 void loop()
 {
+    if (!serialHandler.available())
+    {
+        return;
+    }
+
+    const String command = serialHandler.readCommand();
+
+    Serial.print("Received: ");
+    Serial.println(command);
+
+    const Emotion emotion = parseEmotion(command);
+
+    if (emotion == Emotion::Unknown)
+    {
+        Serial.print("Unknown emotion: ");
+        Serial.println(command);
+
+        return;
+    }
+
+    if (emotion == currentEmotion)
+    {
+        return;
+    }
+
+    const Emoji* emoji = getEmoji(emotion);
+
+    if (emoji == nullptr)
+    {
+        Serial.print("Unsupported emotion: ");
+        Serial.println(command);
+
+        return;
+    }
+
+    display.show(*emoji);
+
+    currentEmotion = emotion;
+
+    Serial.print("Display updated: ");
+    Serial.println(command);
 }
